@@ -1,3 +1,4 @@
+import { compileRules, createRulesPage } from './rules.js';
 import { applyTheme, createThemePicker, normalizeTheme } from './themes.js';
 import { installUpdateEntry, boundWorldbook } from './lorebook.js';
 import { createHistory } from './history.js';
@@ -61,7 +62,7 @@ async function writeUpdateWorldbook() {
   if (writingLorebook) throw Error('正在写入世界书，请稍候。');
   const id = identity(); writingLorebook = true;
   try {
-    const result = await installUpdateEntry({ context, check: () => checkIdentity(id) });
+    const result = await installUpdateEntry({ context, check: () => checkIdentity(id), extraPrompt: compileRules(context(), KEY, 'update', false) });
     const message = `世界书「${result.name}」：${result.action}“世界状态栏 · 变量更新规则”（UID ${result.uid}）。` + (result.warning || '已设为启用的常驻条目。自动处理模型更新需启用小白X变量管理 2.0。');
     notify(message, !!result.warning); return message;
   } finally { writingLorebook = false; }
@@ -98,6 +99,7 @@ async function showHud(page = selectedPage) {
   const tabs = node('div', undefined, 'wsh-tabs'); tabs.setAttribute('role', 'tablist');
   const stateTab = node('button', '状态栏', 'wsh-tab');
   const generateTab = node('button', '生成设置', 'wsh-tab');
+  const rulesTab = node('button', '状态规则', 'wsh-tab'); rulesTab.id = 'wsh-rules-tab';
   const historyTab = node('button', '楼层记录', 'wsh-tab'); historyTab.id = 'wsh-history-tab';
   const displayTab = node('button', '设置', 'wsh-tab'); displayTab.id = 'wsh-display-tab';
   const templateTab = node('button', '模板', 'wsh-tab'); templateTab.type = 'button'; templateTab.id = 'wsh-template-tab';
@@ -126,15 +128,18 @@ async function showHud(page = selectedPage) {
   history.sync();
   const recordsView = historyView({ history, node });
   const historyPage = recordsView.element; historyPage.id = 'wsh-history-page';
+  const rulesPage = createRulesPage({ context, settingsKey: KEY, node, check: () => checkIdentity(id), syncWorldbook: writeUpdateWorldbook }); rulesPage.id = 'wsh-rules-page';
   const displayPage = createDisplaySettings(); displayPage.id = 'wsh-display-page';
-  for (const [tab, page] of [[historyTab, historyPage], [displayTab, displayPage]]) { tab.type = 'button'; tab.setAttribute('aria-controls', page.id); page.setAttribute('role', 'tabpanel'); page.setAttribute('aria-labelledby', tab.id); }
+  for (const [tab, page] of [[historyTab, historyPage], [displayTab, displayPage], [rulesTab, rulesPage]]) { tab.type = 'button'; tab.setAttribute('aria-controls', page.id); page.setAttribute('role', 'tabpanel'); page.setAttribute('aria-labelledby', tab.id); }
+  rulesTab.onclick = () => selectPage('rules');
   historyTab.onclick = () => selectPage('history'); displayTab.onclick = () => selectPage('display');
   function selectPage(value) {
-    selectedPage = ['generate', 'templates', 'history', 'display'].includes(value) ? value : 'state';
+    selectedPage = ['generate', 'templates', 'history', 'display', 'rules'].includes(value) ? value : 'state';
     if (selectedPage === 'state' && readyHtml && !frameLoaded) { frame.srcdoc = readyHtml; frameLoaded = true; }
+    rulesPage.hidden = selectedPage !== 'rules';
     historyPage.hidden = selectedPage !== 'history'; displayPage.hidden = selectedPage !== 'display';
     frame.hidden = selectedPage !== 'state'; generationPage.hidden = selectedPage !== 'generate'; templatePage.hidden = selectedPage !== 'templates';
-    for (const [b, name] of [[stateTab, 'state'], [generateTab, 'generate'], [templateTab, 'templates'], [historyTab, 'history'], [displayTab, 'display']]) {
+    for (const [b, name] of [[stateTab, 'state'], [generateTab, 'generate'], [templateTab, 'templates'], [historyTab, 'history'], [displayTab, 'display'], [rulesTab, 'rules']]) {
       b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(selectedPage === name));
       b.tabIndex = selectedPage === name ? 0 : -1;
     }
@@ -142,11 +147,11 @@ async function showHud(page = selectedPage) {
   stateTab.onclick = () => selectPage('state'); generateTab.onclick = () => selectPage('generate'); templateTab.onclick = () => selectPage('templates');
   tabs.addEventListener('keydown', e => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-    e.preventDefault(); const pages = ['state', 'generate', 'templates', 'history', 'display']; const i = pages.indexOf(selectedPage);
-    const j = e.key === 'Home' ? 0 : e.key === 'End' ? 4 : (i + (e.key === 'ArrowRight' ? 1 : 4)) % 5;
-    selectPage(pages[j]); [stateTab, generateTab, templateTab, historyTab, displayTab][j].focus();
+    e.preventDefault(); const pages = ['state', 'generate', 'templates', 'rules', 'history', 'display']; const i = pages.indexOf(selectedPage);
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? 5 : (i + (e.key === 'ArrowRight' ? 1 : 5)) % 6;
+    selectPage(pages[j]); [stateTab, generateTab, templateTab, rulesTab, historyTab, displayTab][j].focus();
   });
-  selectHudPage = selectPage; tabs.append(stateTab, generateTab, templateTab, historyTab, displayTab); body.append(frame, generationPage, templatePage, historyPage, displayPage); selectPage(page);
+  selectHudPage = selectPage; tabs.append(stateTab, generateTab, templateTab, rulesTab, historyTab, displayTab); body.append(frame, generationPage, templatePage, historyPage, displayPage, rulesPage); selectPage(page);
   frame.title = '世界状态栏编辑器';
   // Only the bundled frame may use this variable bridge; commands are allowlisted.
   const token = crypto.randomUUID();
@@ -188,7 +193,7 @@ async function showHud(page = selectedPage) {
   };
   const copy = node('button', '复制模型更新提示词', 'menu_button'); copy.type = 'button';
   copy.onclick = async () => {
-    try { const text = buildUpdatePrompt(readCurrent()); const ok = await copyPrompt(text); quickStatus.textContent = ok ? '已复制当前变量、路径与更新要求，可粘贴到对话。' : '请在弹窗中手动复制。'; }
+    try { const text = buildUpdatePrompt(readCurrent()) + '\n\n' + compileRules(context(), KEY, 'update').replaceAll('<', '＜').replaceAll('>', '＞'); const ok = await copyPrompt(text); quickStatus.textContent = ok ? '已复制当前变量、路径与更新要求，可粘贴到对话。' : '请在弹窗中手动复制。'; }
     catch (e) { quickStatus.textContent = e.message; }
   };
   quickActions.append(update, copy);
@@ -276,7 +281,7 @@ function mount() {
     try {
       const result = await generateStatus({ api: { baseUrl: s.baseUrl, apiKey: sessionKey, model: s.model, timeoutMs: 120000, maxTokens: s.maxTokens }, mode,
         includeGlobalBooks: s.includeGlobalBooks, extraBooks: s.extraBooks.split(/\r?\n/).map(x=>x.trim()).filter(Boolean), maxSourceChars: s.maxSourceChars,
-        updateNote: s.updateNote || '', instructions: s.instructions || '根据世界观设计简洁实用的状态栏。' }, running.signal);
+        updateNote: s.updateNote || '', instructions: s.instructions || '根据世界观设计简洁实用的状态栏。', statusRules: compileRules(context(), KEY, mode === 'update' ? 'update' : 'generate') }, running.signal);
       report.textContent = result.ok ? (result.changed ? '操作完成，可打开状态栏查看。' : '没有需要修改的内容。') + ' 读取世界书：' + (result.books?.join('、') || '无') : result.message || '已有任务运行中。';
       return result;
     } finally { syncHistory(); running = null; generateButton.disabled = replaceButton.disabled = saveButton.disabled = false; }

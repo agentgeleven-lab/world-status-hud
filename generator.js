@@ -142,6 +142,7 @@ try {
 禁止新增或删除项目/变量，禁止改变类型，不确定的值保持不变。
 可用类型：文本、有限数字、布尔、字符串数组、进度对象。进度必须完整给出当前和最大字段，0≤当前≤最大且最大>0。
 不要机械重复扣除已体现在状态中的变化。`;
+  if (CONFIG.statusRules) systemPrompt += '\n\n' + CONFIG.statusRules;
   const replacing = CONFIG.mode !== 'update' && (CONFIG.mode === 'replace' || isUntouchedDemo || initial === null);
   const prompt = JSON.stringify({
     操作: CONFIG.mode === 'update' ? '根据最新情况更新已有变量值' : replacing ? '根据设定生成完整初始状态栏' : '为已有状态栏补充有用的缺失字段',
