@@ -1,3 +1,5 @@
+import { createHistory } from './history.js';
+import { historyView, installFloorButtons } from './history-ui.js';
 import { createTemplatesPage, copyPrompt } from './templates.js';
 import { buildUpdatePrompt } from './state-tools.js';
 import { generateStatus } from './generator.js';
@@ -15,7 +17,7 @@ let generationForm, settingsHome;
 let selectedPage = 'state';
 let selectHudPage = null;
 let requestUpdate = null;
-const defaults = { baseUrl: '', model: '', includeGlobalBooks: true, extraBooks: '', instructions: '', maxTokens: 4096, maxSourceChars: 100000 };
+const defaults = { floorButtons: true, baseUrl: '', model: '', includeGlobalBooks: true, extraBooks: '', instructions: '', maxTokens: 4096, maxSourceChars: 100000 };
 const getSettings = () => ({ ...defaults, ...context().extensionSettings[KEY] });
 function node(tag, text, className) {
   const e = document.createElement(tag);
@@ -39,6 +41,18 @@ function parseState(raw) {
   if (!d || Array.isArray(d) || typeof d.项目 !== 'object' || !d.项目 || Array.isArray(d.项目)) throw Error('状态栏结构不兼容。');
   return d;
 }
+const history = createHistory({ context, read: () => parseState(context().chatMetadata.variables?.状态栏),
+  write: value => { if (value === null) { delete context().chatMetadata.variables?.状态栏; } else setLocalVariable('状态栏', JSON.stringify(value)); },
+  beforeRestore: () => { running?.abort(); closeHud(); }, warn: message => notify(message, true) });
+const floorButtons = installFloorButtons({ history, node, enabled: () => getSettings().floorButtons });
+function syncHistory() { try { history.sync(); floorButtons.refresh(); } catch (e) { console.warn('[世界状态栏] 记录同步失败', e); } }
+function createDisplaySettings() {
+  const page = node('section', undefined, 'wsh-generation-page');
+  const label = node('label', '在消息末尾显示小型状态按钮'); const input = node('input'); input.type = 'checkbox'; input.checked = getSettings().floorButtons;
+  input.onchange = () => { context().extensionSettings[KEY] = { ...context().extensionSettings[KEY], floorButtons: input.checked }; context().saveSettingsDebounced(); floorButtons.refresh(); };
+  label.append(input); page.append(node('h3', '显示与记录设置'), label, node('p', '楼层记录随当前聊天自动保存。关闭按钮只隐藏入口，仍可在“楼层记录”中查看。'), node('p', '翻页仅浏览；删除后续消息、回退剧情时才恢复末尾楼层的变量。没有记录的旧楼层不会自动推测数值。'));
+  return page;
+}
 function closeHud() {
   hudEpoch++;
   hudPanel?.close();
@@ -60,6 +74,8 @@ async function showHud(page = selectedPage) {
   const tabs = node('div', undefined, 'wsh-tabs'); tabs.setAttribute('role', 'tablist');
   const stateTab = node('button', '状态栏', 'wsh-tab');
   const generateTab = node('button', '生成设置', 'wsh-tab');
+  const historyTab = node('button', '楼层记录', 'wsh-tab'); historyTab.id = 'wsh-history-tab';
+  const displayTab = node('button', '设置', 'wsh-tab'); displayTab.id = 'wsh-display-tab';
   const templateTab = node('button', '模板', 'wsh-tab'); templateTab.type = 'button'; templateTab.id = 'wsh-template-tab';
   stateTab.type = generateTab.type = 'button';
   stateTab.id = 'wsh-state-tab'; generateTab.id = 'wsh-generate-tab';
@@ -74,17 +90,26 @@ async function showHud(page = selectedPage) {
       checkIdentity(id); if (running) throw Error('模型任务运行中，请稍后应用模板。');
       const old = id.metadata.variables?.状态栏;
       if (old !== undefined) setLocalVariable('状态栏_生成前备份_' + Date.now(), old);
-      setLocalVariable('状态栏', JSON.stringify(value)); await context().saveMetadata();
+      setLocalVariable('状态栏', JSON.stringify(value)); history.sync(); await context().saveMetadata();
     }, isRunning: () => !!running, node });
   templatePage.id = 'wsh-template-page'; templatePage.setAttribute('role', 'tabpanel'); templatePage.setAttribute('aria-labelledby', templateTab.id);
   templateTab.setAttribute('aria-controls', templatePage.id);
   const frame = node('iframe');
+  let readyHtml = '', frameLoaded = false;
   frame.id = 'wsh-state-page'; frame.setAttribute('role', 'tabpanel'); frame.setAttribute('aria-labelledby', stateTab.id);
   stateTab.setAttribute('aria-controls', frame.id); generateTab.setAttribute('aria-controls', generationPage.id);
+  history.sync();
+  const recordsView = historyView({ history, node });
+  const historyPage = recordsView.element; historyPage.id = 'wsh-history-page';
+  const displayPage = createDisplaySettings(); displayPage.id = 'wsh-display-page';
+  for (const [tab, page] of [[historyTab, historyPage], [displayTab, displayPage]]) { tab.type = 'button'; tab.setAttribute('aria-controls', page.id); page.setAttribute('role', 'tabpanel'); page.setAttribute('aria-labelledby', tab.id); }
+  historyTab.onclick = () => selectPage('history'); displayTab.onclick = () => selectPage('display');
   function selectPage(value) {
-    selectedPage = ['generate', 'templates'].includes(value) ? value : 'state';
+    selectedPage = ['generate', 'templates', 'history', 'display'].includes(value) ? value : 'state';
+    if (selectedPage === 'state' && readyHtml && !frameLoaded) { frame.srcdoc = readyHtml; frameLoaded = true; }
+    historyPage.hidden = selectedPage !== 'history'; displayPage.hidden = selectedPage !== 'display';
     frame.hidden = selectedPage !== 'state'; generationPage.hidden = selectedPage !== 'generate'; templatePage.hidden = selectedPage !== 'templates';
-    for (const [b, name] of [[stateTab, 'state'], [generateTab, 'generate'], [templateTab, 'templates']]) {
+    for (const [b, name] of [[stateTab, 'state'], [generateTab, 'generate'], [templateTab, 'templates'], [historyTab, 'history'], [displayTab, 'display']]) {
       b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(selectedPage === name));
       b.tabIndex = selectedPage === name ? 0 : -1;
     }
@@ -92,11 +117,11 @@ async function showHud(page = selectedPage) {
   stateTab.onclick = () => selectPage('state'); generateTab.onclick = () => selectPage('generate'); templateTab.onclick = () => selectPage('templates');
   tabs.addEventListener('keydown', e => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-    e.preventDefault(); const pages = ['state', 'generate', 'templates']; const i = pages.indexOf(selectedPage);
-    const j = e.key === 'Home' ? 0 : e.key === 'End' ? 2 : (i + (e.key === 'ArrowRight' ? 1 : 2)) % 3;
-    selectPage(pages[j]); [stateTab, generateTab, templateTab][j].focus();
+    e.preventDefault(); const pages = ['state', 'generate', 'templates', 'history', 'display']; const i = pages.indexOf(selectedPage);
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? 4 : (i + (e.key === 'ArrowRight' ? 1 : 4)) % 5;
+    selectPage(pages[j]); [stateTab, generateTab, templateTab, historyTab, displayTab][j].focus();
   });
-  selectHudPage = selectPage; tabs.append(stateTab, generateTab, templateTab); body.append(frame, generationPage, templatePage); selectPage(page);
+  selectHudPage = selectPage; tabs.append(stateTab, generateTab, templateTab, historyTab, displayTab); body.append(frame, generationPage, templatePage, historyPage, displayPage); selectPage(page);
   frame.title = '世界状态栏编辑器';
   // Only the bundled frame may use this variable bridge; commands are allowlisted.
   const token = crypto.randomUUID();
@@ -117,13 +142,13 @@ async function showHud(page = selectedPage) {
         if (running) throw Error('状态栏生成中，请完成后再编辑。');
         value = parseState(command.slice('/setvar key=状态栏 '.length));
         if (!value) throw Error('不能写入空状态。');
-        setLocalVariable('状态栏', JSON.stringify(value));
+        setLocalVariable('状态栏', JSON.stringify(value)); history.sync();
       } else throw Error('不支持的状态栏命令。');
       event.source.postMessage({ wsh: token, id: requestId, value }, '*');
     } catch (e) { event.source.postMessage({ wsh: token, id: requestId, error: e.message }, '*'); }
   };
   addEventListener('message', listener);
-  dialog.addEventListener('close', () => { removeEventListener('message', listener); frame.srcdoc = ''; if (generationForm?.parentElement === generationPage) settingsHome?.append(generationForm); dialog.remove(); if (hudPanel === dialog) { hudPanel = null; selectHudPage = null; } }, { once: true });
+  dialog.addEventListener('close', () => { recordsView.dispose(); removeEventListener('message', listener); frame.srcdoc = ''; if (generationForm?.parentElement === generationPage) settingsHome?.append(generationForm); dialog.remove(); if (hudPanel === dialog) { hudPanel = null; selectHudPage = null; } }, { once: true });
   close.onclick = closeHud;
   const quickActions = node('div', undefined, 'wsh-actions');
   const quickStatus = node('p', '', 'wsh-quick-status'); quickStatus.setAttribute('role', 'status');
@@ -141,7 +166,7 @@ async function showHud(page = selectedPage) {
   };
   quickActions.append(update, copy);
   dialog.append(heading, tabs, quickActions, quickStatus, body); document.body.append(dialog);
-  hudPanel = dialog; frame.srcdoc = html; dialog.show();
+  hudPanel = dialog; readyHtml = html; selectPage(selectedPage); dialog.show();
   enablePanelDrag(dialog, heading, { context, settingsKey: KEY });
 }
 async function restoreBackup() {
@@ -227,7 +252,7 @@ function mount() {
         updateNote: s.updateNote || '', instructions: s.instructions || '根据世界观设计简洁实用的状态栏。' }, running.signal);
       report.textContent = result.ok ? (result.changed ? '操作完成，可打开状态栏查看。' : '没有需要修改的内容。') + ' 读取世界书：' + (result.books?.join('、') || '无') : result.message || '已有任务运行中。';
       return result;
-    } finally { running = null; generateButton.disabled = replaceButton.disabled = saveButton.disabled = false; }
+    } finally { syncHistory(); running = null; generateButton.disabled = replaceButton.disabled = saveButton.disabled = false; }
   }
   requestUpdate = () => generate('update');
   action('按当前剧情更新值', requestUpdate);
@@ -239,6 +264,10 @@ function mount() {
   generationForm.append(actions, report, node('p', '独立接口使用 Chat Completions 格式，需要允许浏览器跨域。生成与编辑共用聊天变量“状态栏”。', 'wsh-note'));
   panel.append(generationForm);
   host.append(panel);
+  syncHistory();
+  const ctx = context(); const events = ctx.eventTypes || ctx.event_types || {};
+  for (const name of ['CHAT_CHANGED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'GENERATION_ENDED', 'CHARACTER_MESSAGE_RENDERED']) { if (events[name]) ctx.eventSource?.on(events[name], syncHistory); }
+  setInterval(syncHistory, 750);
   installFloatingButton({ context, settingsKey: KEY, identity,
     toggle: async () => { if (hudPanel) closeHud(); else await showHud(); },
     changed: async () => { const wasOpen = !!hudPanel; closeHud(); if (wasOpen) { try { await showHud(); } catch (e) { notify(e.message); } } },
