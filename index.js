@@ -9,6 +9,9 @@ let running = null;
 let sessionKey = '';
 let hudPanel = null;
 let hudEpoch = 0;
+let generationForm, settingsHome;
+let selectedPage = 'state';
+let selectHudPage = null;
 const defaults = { baseUrl: '', model: '', includeGlobalBooks: true, extraBooks: '', instructions: '', maxTokens: 4096, maxSourceChars: 100000 };
 const getSettings = () => ({ ...defaults, ...context().extensionSettings[KEY] });
 function node(tag, text, className) {
@@ -37,7 +40,8 @@ function closeHud() {
   hudEpoch++;
   hudPanel?.close();
 }
-async function showHud() {
+async function showHud(page = selectedPage) {
+  if (typeof page !== 'string') page = selectedPage;
   closeHud();
   const epoch = hudEpoch;
   const id = identity();
@@ -50,7 +54,34 @@ async function showHud() {
   const close = node('button', '关闭', 'menu_button');
   const heading = node('div', undefined, 'wsh-panel-heading');
   heading.append(node('strong', context().characters[context().characterId].name + ' · 当前聊天状态'), close);
+  const tabs = node('div', undefined, 'wsh-tabs'); tabs.setAttribute('role', 'tablist');
+  const stateTab = node('button', '状态栏', 'wsh-tab');
+  const generateTab = node('button', '生成设置', 'wsh-tab');
+  stateTab.type = generateTab.type = 'button';
+  stateTab.id = 'wsh-state-tab'; generateTab.id = 'wsh-generate-tab';
+  const body = node('div', undefined, 'wsh-body');
+  const generationPage = node('section', undefined, 'wsh-generation-page');
+  generationPage.id = 'wsh-generation-page'; generationPage.setAttribute('role', 'tabpanel');
+  generationPage.setAttribute('aria-labelledby', generateTab.id);
+  if (generationForm) generationPage.append(generationForm);
   const frame = node('iframe');
+  frame.id = 'wsh-state-page'; frame.setAttribute('role', 'tabpanel'); frame.setAttribute('aria-labelledby', stateTab.id);
+  stateTab.setAttribute('aria-controls', frame.id); generateTab.setAttribute('aria-controls', generationPage.id);
+  function selectPage(value) {
+    selectedPage = value === 'generate' ? 'generate' : 'state';
+    frame.hidden = selectedPage !== 'state'; generationPage.hidden = selectedPage !== 'generate';
+    for (const [b, name] of [[stateTab, 'state'], [generateTab, 'generate']]) {
+      b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(selectedPage === name));
+      b.tabIndex = selectedPage === name ? 0 : -1;
+    }
+  }
+  stateTab.onclick = () => selectPage('state'); generateTab.onclick = () => selectPage('generate');
+  tabs.addEventListener('keydown', e => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault(); const value = e.key === 'Home' ? 'state' : e.key === 'End' ? 'generate' : selectedPage === 'state' ? 'generate' : 'state';
+    selectPage(value); (value === 'state' ? stateTab : generateTab).focus();
+  });
+  selectHudPage = selectPage; tabs.append(stateTab, generateTab); body.append(frame, generationPage); selectPage(page);
   frame.title = '世界状态栏编辑器';
   // Only the bundled frame may use this variable bridge; commands are allowlisted.
   const token = crypto.randomUUID();
@@ -77,9 +108,9 @@ async function showHud() {
     } catch (e) { event.source.postMessage({ wsh: token, id: requestId, error: e.message }, '*'); }
   };
   addEventListener('message', listener);
-  dialog.addEventListener('close', () => { removeEventListener('message', listener); frame.srcdoc = ''; dialog.remove(); if (hudPanel === dialog) hudPanel = null; }, { once: true });
+  dialog.addEventListener('close', () => { removeEventListener('message', listener); frame.srcdoc = ''; if (generationForm?.parentElement === generationPage) settingsHome?.append(generationForm); dialog.remove(); if (hudPanel === dialog) { hudPanel = null; selectHudPage = null; } }, { once: true });
   close.onclick = closeHud;
-  dialog.append(heading, frame); document.body.append(dialog);
+  dialog.append(heading, tabs, body); document.body.append(dialog);
   hudPanel = dialog; frame.srcdoc = html; dialog.show();
   enablePanelDrag(dialog, heading, { context, settingsKey: KEY });
 }
@@ -117,12 +148,15 @@ function mount() {
   const panel = node('details'); panel.id = 'wsh-settings';
   panel.append(node('summary', '世界状态栏 · V1'));
   panel.append(node('p', '读取角色卡与关联世界书，生成适合当前世界观的状态栏。'));
+  settingsHome = panel;
+  generationForm = node('div', undefined, 'wsh-generation-form');
+  generationForm.append(node('h3', '按设定生成状态栏'), node('p', '读取当前角色卡与关联世界书，生成后可切回“状态栏”查看。'));
   const fields = {};
   function field(key, label, type = 'text') {
     const wrap = node('label', label);
     const input = node(type === 'textarea' ? 'textarea' : 'input', undefined, 'text_pole');
     if (type !== 'textarea') input.type = type;
-    fields[key] = input; wrap.append(input); panel.append(wrap); return input;
+    fields[key] = input; wrap.append(input); generationForm.append(wrap); return input;
   }
   const settings = getSettings();
   field('baseUrl', '独立 API 地址（留空使用酒馆当前连接）').placeholder = 'https://你的服务/v1';
@@ -166,9 +200,10 @@ function mount() {
   const generateButton = action('生成／补充', () => generate('fill'));
   const replaceButton = action('重新生成整套', () => generate('replace'));
   action('取消生成', () => { running?.abort(); report.textContent = '已请求取消，等待底层调用返回；结果不会写入。'; });
-  action('打开状态栏', showHud);
+  action('查看状态栏', () => selectHudPage ? selectHudPage('state') : showHud('state'));
   action('恢复备份', restoreBackup);
-  panel.append(actions, report, node('p', '独立接口使用 Chat Completions 格式，需要允许浏览器跨域。生成与编辑共用聊天变量“状态栏”。', 'wsh-note'));
+  generationForm.append(actions, report, node('p', '独立接口使用 Chat Completions 格式，需要允许浏览器跨域。生成与编辑共用聊天变量“状态栏”。', 'wsh-note'));
+  panel.append(generationForm);
   host.append(panel);
   installFloatingButton({ context, settingsKey: KEY, identity,
     toggle: async () => { if (hudPanel) closeHud(); else await showHud(); },
