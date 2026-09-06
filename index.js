@@ -1,3 +1,4 @@
+import { applyTheme, createThemePicker, normalizeTheme } from './themes.js';
 import { installUpdateEntry, boundWorldbook } from './lorebook.js';
 import { createHistory } from './history.js';
 import { historyView, installFloorButtons } from './history-ui.js';
@@ -18,7 +19,7 @@ let generationForm, settingsHome;
 let selectedPage = 'state';
 let selectHudPage = null;
 let requestUpdate = null;
-const defaults = { floorButtons: true, baseUrl: '', model: '', includeGlobalBooks: true, extraBooks: '', instructions: '', maxTokens: 4096, maxSourceChars: 100000 };
+const defaults = { theme: 'nexus', floorButtons: true, baseUrl: '', model: '', includeGlobalBooks: true, extraBooks: '', instructions: '', maxTokens: 4096, maxSourceChars: 100000 };
 const getSettings = () => ({ ...defaults, ...context().extensionSettings[KEY] });
 function node(tag, text, className) {
   const e = document.createElement(tag);
@@ -52,7 +53,7 @@ function createDisplaySettings() {
   const label = node('label', '在消息末尾显示小型状态按钮'); const input = node('input'); input.type = 'checkbox'; input.checked = getSettings().floorButtons;
   input.onchange = () => { context().extensionSettings[KEY] = { ...context().extensionSettings[KEY], floorButtons: input.checked }; context().saveSettingsDebounced(); floorButtons.refresh(); };
   label.append(input); page.append(node('h3', '显示与记录设置'), label, node('p', '楼层记录随当前聊天自动保存。关闭按钮只隐藏入口，仍可在“楼层记录”中查看。'), node('p', '翻页仅浏览；删除后续消息、回退剧情时才恢复末尾楼层的变量。没有记录的旧楼层不会自动推测数值。'));
-  page.append(createLorebookControl());
+  page.append(createThemePicker({ node, context, settingsKey: KEY, document }), createLorebookControl());
   return page;
 }
 let writingLorebook = false;
@@ -118,6 +119,7 @@ async function showHud(page = selectedPage) {
   templatePage.id = 'wsh-template-page'; templatePage.setAttribute('role', 'tabpanel'); templatePage.setAttribute('aria-labelledby', templateTab.id);
   templateTab.setAttribute('aria-controls', templatePage.id);
   const frame = node('iframe');
+  frame.addEventListener('load', () => { try { frame.contentDocument?.documentElement?.setAttribute('data-wsh-theme', normalizeTheme(getSettings().theme)); } catch {} });
   let readyHtml = '', frameLoaded = false;
   frame.id = 'wsh-state-page'; frame.setAttribute('role', 'tabpanel'); frame.setAttribute('aria-labelledby', stateTab.id);
   stateTab.setAttribute('aria-controls', frame.id); generateTab.setAttribute('aria-controls', generationPage.id);
@@ -153,6 +155,8 @@ async function showHud(page = selectedPage) {
   window.STscript=command=>new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>{pending.delete(id);reject(Error('连接超时，请重新打开面板。'))},15000);pending.set(id,{resolve,reject,timer});parent.postMessage({wsh:token,id,command},'*')});
   addEventListener('message',e=>{if(e.source!==parent||e.data?.wsh!==token)return;const p=pending.get(e.data.id);if(!p)return;clearTimeout(p.timer);pending.delete(e.data.id);e.data.error?p.reject(Error(e.data.error)):p.resolve(e.data.value)});
   <\/script>`;
+  html = html.replace('<html lang="zh-CN">', '<html lang="zh-CN" data-wsh-frame data-wsh-theme="' + normalizeTheme(getSettings().theme) + '">');
+  html = html.replace('</head>', '<link rel="stylesheet" href="' + new URL('./themes.css', import.meta.url).href + '"></head>');
   html = html.replace('<head>', '<head>' + bridge);
   const listener = event => {
     if (event.source !== frame.contentWindow || event.data?.wsh !== token) return;
@@ -288,6 +292,7 @@ function mount() {
   generationForm.append(actions, report, node('p', '独立接口使用 Chat Completions 格式，需要允许浏览器跨域。生成与编辑共用聊天变量“状态栏”。', 'wsh-note'));
   panel.append(generationForm);
   host.append(panel);
+  applyTheme(document, getSettings().theme);
   syncHistory();
   const ctx = context(); const events = ctx.eventTypes || ctx.event_types || {};
   for (const name of ['CHAT_CHANGED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'GENERATION_ENDED', 'CHARACTER_MESSAGE_RENDERED']) { if (events[name]) ctx.eventSource?.on(events[name], syncHistory); }
