@@ -68,16 +68,24 @@ export function createRulesPage({ context, settingsKey, node, check, syncWorldbo
   function protect(fn) { return () => { try { check(); fn(); } catch (e) { status.textContent = e.message; } }; }
   function action(label, fn) { const b = node('button', label, 'menu_button'); b.type = 'button'; b.onclick = protect(fn); actions.append(b); return b; }
   function add(sample = false) {
-    rules.push({ id: crypto.randomUUID(), title: sample ? '好感度规则示例' : '新规则', content: sample ? AFFINITY_RULE : '', scope: 'both', enabled: true }); save(); render();
+    const id = crypto.randomUUID();
+    rules.push({ id, title: sample ? '好感度规则示例' : '新规则', content: sample ? AFFINITY_RULE : '', scope: 'both', enabled: true }); save(); render(id);
   }
   action('＋ 新建规则', () => add()); action('添加好感度示例', () => add(true));
   const sync = action('同步到世界书', () => {});
   sync.onclick = async () => { sync.disabled = true; try { check(); save(); status.textContent = await syncWorldbook(); } catch (e) { status.textContent = e.message; } finally { sync.disabled = false; } };
-  function render() {
+  function render(openId) {
     list.replaceChildren();
     if (!rules.length) list.append(node('p', '暂无规则。新建自己的规则，或添加示例后修改。', 'wsh-note'));
     for (const rule of rules) {
-      const card = node('section', undefined, 'wsh-rule-card');
+      const card = node('details', undefined, 'wsh-rule-card'); card.open = rule.id === openId;
+      const summary = node('summary', undefined, 'wsh-rule-summary');
+      const summaryTitle = node('span', undefined, 'wsh-rule-title'), summaryMeta = node('span', undefined, 'wsh-rule-meta');
+      function refreshSummary() {
+        summaryTitle.textContent = rule.title || '未命名规则';
+        summaryMeta.textContent = (rule.enabled ? '已启用' : '已停用') + ' · ' + ({ both: '生成与更新', generate: '仅生成', update: '仅更新' }[rule.scope] || '未选择范围');
+      }
+      refreshSummary(); summary.append(summaryTitle, summaryMeta); card.append(summary);
       const titleLabel = node('label', '条目名称'), title = node('input', undefined, 'text_pole'); title.value = rule.title; title.maxLength = 100;
       const enabledLabel = node('label', '启用'), enabled = node('input'); enabled.type = 'checkbox'; enabled.checked = !!rule.enabled; enabledLabel.append(enabled);
       const scopeLabel = node('label', '适用范围'), scope = node('select', undefined, 'text_pole');
@@ -85,10 +93,10 @@ export function createRulesPage({ context, settingsKey, node, check, syncWorldbo
       scope.value = rule.scope;
       const contentLabel = node('label', '规则内容'), content = node('textarea', undefined, 'text_pole'); content.value = rule.content; content.rows = 10; content.maxLength = 20000;
       titleLabel.append(title); scopeLabel.append(scope); contentLabel.append(content);
-      title.oninput = protect(() => { rule.title = title.value; save(); });
+      title.oninput = protect(() => { rule.title = title.value; save(); refreshSummary(); });
       content.oninput = protect(() => { rule.content = content.value; save(); });
-      scope.onchange = protect(() => { rule.scope = scope.value; save(); });
-      enabled.onchange = protect(() => { rule.enabled = enabled.checked; save(); });
+      scope.onchange = protect(() => { rule.scope = scope.value; save(); refreshSummary(); });
+      enabled.onchange = protect(() => { rule.enabled = enabled.checked; save(); refreshSummary(); });
       const remove = node('button', '删除规则', 'menu_button'); remove.type = 'button'; remove.onclick = protect(() => { if (confirm('删除规则“' + rule.title + '”？')) { rules = rules.filter(r => r.id !== rule.id); save(); render(); } });
       card.append(titleLabel, enabledLabel, scopeLabel, contentLabel, remove); list.append(card);
     }

@@ -13,3 +13,4 @@
 
 .wsh-rule-card{padding:14px;border:1px solid var(--wsh-line,#405970);border-radius:var(--wsh-radius,12px);background:var(--wsh-card,#142331);margin:12px 0}.wsh-rule-card label{display:block;margin:10px 0}.wsh-rule-card .text_pole{display:block;box-sizing:border-box;width:100%;margin-top:5px}.wsh-rule-card textarea{min-height:180px;resize:vertical;line-height:1.6}.wsh-rule-card input[type=checkbox]{margin-left:8px}
 .wsh-rule-card .text_pole{padding:9px}.wsh-rules-page .menu_button{padding:8px 12px}
+.wsh-rule-summary{cursor:pointer;line-height:1.6;overflow-wrap:anywhere;color:var(--wsh-text)}.wsh-rule-summary::marker{color:var(--wsh-accent)}.wsh-rule-title{font-weight:700}.wsh-rule-meta{display:block;margin-left:18px;color:var(--wsh-muted);font-size:12px}.wsh-rule-card[open]>.wsh-rule-summary{padding-bottom:10px;border-bottom:1px solid var(--wsh-line)}.wsh-rule-summary:focus-visible{outline:2px solid var(--wsh-accent);outline-offset:4px;border-radius:4px}

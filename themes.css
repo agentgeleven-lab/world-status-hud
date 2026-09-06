@@ -7,6 +7,11 @@ html[data-wsh-theme=mono],[data-wsh-palette=mono]{--wsh-bg:#f4f5f6;--wsh-card:#f
 html[data-wsh-theme] :is(.wsh-dialog,.wsh-restore,.wsh-floor-host .wsh-history){color-scheme:var(--wsh-scheme);font-family:var(--wsh-font);color:var(--wsh-text);background:linear-gradient(145deg,var(--wsh-glow),transparent 45%),var(--wsh-bg);border-color:var(--wsh-line);border-radius:var(--wsh-radius)}
 html[data-wsh-theme] :is(.wsh-dialog,.wsh-restore) :is(button,input,select,textarea,.text_pole){font-family:inherit;background:var(--wsh-control);color:var(--wsh-text);border:1px solid var(--wsh-line);border-radius:7px}
 html[data-wsh-theme] :is(.wsh-dialog,.wsh-restore) :is(button,input,select,textarea):focus-visible{outline:2px solid var(--wsh-accent);outline-offset:2px}
+/* Tavern themes may force control backgrounds; contain overrides to the rule editor. */
+html[data-wsh-theme] .wsh-dialog .wsh-rules-page :is(input.text_pole,select.text_pole,textarea.text_pole,.menu_button){background:var(--wsh-control)!important;background-image:none!important;color:var(--wsh-text)!important;border:1px solid var(--wsh-line)!important;box-shadow:none!important;text-shadow:none!important;font-family:var(--wsh-font);color-scheme:var(--wsh-scheme)}
+html[data-wsh-theme] .wsh-dialog .wsh-rules-page :is(input,textarea)::placeholder{color:var(--wsh-muted);opacity:1}
+html[data-wsh-theme] .wsh-dialog .wsh-rules-page select option{background:var(--wsh-control);color:var(--wsh-text)}
+html[data-wsh-theme] .wsh-dialog .wsh-rules-page input[type=checkbox]{accent-color:var(--wsh-accent);color-scheme:var(--wsh-scheme)}
 html[data-wsh-theme] .wsh-tabs{border-color:var(--wsh-line);gap:5px}
 html[data-wsh-theme] .wsh-tab[aria-selected=true]{background:var(--wsh-accent);color:var(--wsh-ink);border-color:var(--wsh-accent)}
 html[data-wsh-theme] .wsh-panel-heading{padding:4px 3px 8px;border-bottom:1px solid var(--wsh-line)}
