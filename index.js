@@ -1,3 +1,4 @@
+import { installUpdateEntry, boundWorldbook } from './lorebook.js';
 import { createHistory } from './history.js';
 import { historyView, installFloorButtons } from './history-ui.js';
 import { createTemplatesPage, copyPrompt } from './templates.js';
@@ -51,7 +52,29 @@ function createDisplaySettings() {
   const label = node('label', '在消息末尾显示小型状态按钮'); const input = node('input'); input.type = 'checkbox'; input.checked = getSettings().floorButtons;
   input.onchange = () => { context().extensionSettings[KEY] = { ...context().extensionSettings[KEY], floorButtons: input.checked }; context().saveSettingsDebounced(); floorButtons.refresh(); };
   label.append(input); page.append(node('h3', '显示与记录设置'), label, node('p', '楼层记录随当前聊天自动保存。关闭按钮只隐藏入口，仍可在“楼层记录”中查看。'), node('p', '翻页仅浏览；删除后续消息、回退剧情时才恢复末尾楼层的变量。没有记录的旧楼层不会自动推测数值。'));
+  page.append(createLorebookControl());
   return page;
+}
+let writingLorebook = false;
+async function writeUpdateWorldbook() {
+  if (writingLorebook) throw Error('正在写入世界书，请稍候。');
+  const id = identity(); writingLorebook = true;
+  try {
+    const result = await installUpdateEntry({ context, check: () => checkIdentity(id) });
+    const message = `世界书「${result.name}」：${result.action}“世界状态栏 · 变量更新规则”（UID ${result.uid}）。` + (result.warning || '已设为启用的常驻条目。自动处理模型更新需启用小白X变量管理 2.0。');
+    notify(message, !!result.warning); return message;
+  } finally { writingLorebook = false; }
+}
+function createLorebookControl() {
+  const section = node('section', undefined, 'wsh-lorebook-control');
+  const displayedIdentity = identity();
+  let name; try { name = boundWorldbook(context()); } catch { name = '未绑定，请先在角色卡中绑定主世界书'; }
+  const button = node('button', '写入世界书更新提示词', 'menu_button'); button.type = 'button';
+  const result = node('p', '', 'wsh-quick-status'); result.setAttribute('role', 'status');
+  button.onclick = async () => { button.disabled = true; try { checkIdentity(displayedIdentity); if (boundWorldbook(context()) !== name) throw Error('世界书绑定已改变，请重新打开窗口后再写入。'); result.textContent = '正在读取并写入绑定世界书…'; result.textContent = await writeUpdateWorldbook(); } catch (e) { result.textContent = e.message; } finally { button.disabled = false; } };
+  section.append(node('h3', '变量更新提示词'), node('p', '当前主世界书：' + name), button, result,
+    node('p', '添加常驻条目，动态读取当前“状态栏”变量。重复点击更新本插件条目。其他共用这本世界书的角色也会使用该规则。', 'wsh-note'));
+  return section;
 }
 function closeHud() {
   hudEpoch++;
@@ -261,6 +284,7 @@ function mount() {
   action('取消生成', () => { running?.abort(); report.textContent = '已请求取消，等待底层调用返回；结果不会写入。'; });
   action('查看状态栏', () => selectHudPage ? selectHudPage('state') : showHud('state'));
   action('恢复备份', restoreBackup);
+  action('写入世界书更新提示词', async () => { report.textContent = await writeUpdateWorldbook(); });
   generationForm.append(actions, report, node('p', '独立接口使用 Chat Completions 格式，需要允许浏览器跨域。生成与编辑共用聊天变量“状态栏”。', 'wsh-note'));
   panel.append(generationForm);
   host.append(panel);
