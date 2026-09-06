@@ -1,3 +1,5 @@
+import { createTemplatesPage, copyPrompt } from './templates.js';
+import { buildUpdatePrompt } from './state-tools.js';
 import { generateStatus } from './generator.js';
 import { installFloatingButton } from './floating.js';
 import { enablePanelDrag } from './drag-panel.js';
@@ -12,6 +14,7 @@ let hudEpoch = 0;
 let generationForm, settingsHome;
 let selectedPage = 'state';
 let selectHudPage = null;
+let requestUpdate = null;
 const defaults = { baseUrl: '', model: '', includeGlobalBooks: true, extraBooks: '', instructions: '', maxTokens: 4096, maxSourceChars: 100000 };
 const getSettings = () => ({ ...defaults, ...context().extensionSettings[KEY] });
 function node(tag, text, className) {
@@ -57,6 +60,7 @@ async function showHud(page = selectedPage) {
   const tabs = node('div', undefined, 'wsh-tabs'); tabs.setAttribute('role', 'tablist');
   const stateTab = node('button', '状态栏', 'wsh-tab');
   const generateTab = node('button', '生成设置', 'wsh-tab');
+  const templateTab = node('button', '模板', 'wsh-tab'); templateTab.type = 'button'; templateTab.id = 'wsh-template-tab';
   stateTab.type = generateTab.type = 'button';
   stateTab.id = 'wsh-state-tab'; generateTab.id = 'wsh-generate-tab';
   const body = node('div', undefined, 'wsh-body');
@@ -64,24 +68,35 @@ async function showHud(page = selectedPage) {
   generationPage.id = 'wsh-generation-page'; generationPage.setAttribute('role', 'tabpanel');
   generationPage.setAttribute('aria-labelledby', generateTab.id);
   if (generationForm) generationPage.append(generationForm);
+  const readCurrent = () => { checkIdentity(id); return parseState(id.metadata.variables?.状态栏); };
+  const templatePage = createTemplatesPage({ context, settingsKey: KEY, read: readCurrent,
+    write: async value => {
+      checkIdentity(id); if (running) throw Error('模型任务运行中，请稍后应用模板。');
+      const old = id.metadata.variables?.状态栏;
+      if (old !== undefined) setLocalVariable('状态栏_生成前备份_' + Date.now(), old);
+      setLocalVariable('状态栏', JSON.stringify(value)); await context().saveMetadata();
+    }, isRunning: () => !!running, node });
+  templatePage.id = 'wsh-template-page'; templatePage.setAttribute('role', 'tabpanel'); templatePage.setAttribute('aria-labelledby', templateTab.id);
+  templateTab.setAttribute('aria-controls', templatePage.id);
   const frame = node('iframe');
   frame.id = 'wsh-state-page'; frame.setAttribute('role', 'tabpanel'); frame.setAttribute('aria-labelledby', stateTab.id);
   stateTab.setAttribute('aria-controls', frame.id); generateTab.setAttribute('aria-controls', generationPage.id);
   function selectPage(value) {
-    selectedPage = value === 'generate' ? 'generate' : 'state';
-    frame.hidden = selectedPage !== 'state'; generationPage.hidden = selectedPage !== 'generate';
-    for (const [b, name] of [[stateTab, 'state'], [generateTab, 'generate']]) {
+    selectedPage = ['generate', 'templates'].includes(value) ? value : 'state';
+    frame.hidden = selectedPage !== 'state'; generationPage.hidden = selectedPage !== 'generate'; templatePage.hidden = selectedPage !== 'templates';
+    for (const [b, name] of [[stateTab, 'state'], [generateTab, 'generate'], [templateTab, 'templates']]) {
       b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(selectedPage === name));
       b.tabIndex = selectedPage === name ? 0 : -1;
     }
   }
-  stateTab.onclick = () => selectPage('state'); generateTab.onclick = () => selectPage('generate');
+  stateTab.onclick = () => selectPage('state'); generateTab.onclick = () => selectPage('generate'); templateTab.onclick = () => selectPage('templates');
   tabs.addEventListener('keydown', e => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-    e.preventDefault(); const value = e.key === 'Home' ? 'state' : e.key === 'End' ? 'generate' : selectedPage === 'state' ? 'generate' : 'state';
-    selectPage(value); (value === 'state' ? stateTab : generateTab).focus();
+    e.preventDefault(); const pages = ['state', 'generate', 'templates']; const i = pages.indexOf(selectedPage);
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? 2 : (i + (e.key === 'ArrowRight' ? 1 : 2)) % 3;
+    selectPage(pages[j]); [stateTab, generateTab, templateTab][j].focus();
   });
-  selectHudPage = selectPage; tabs.append(stateTab, generateTab); body.append(frame, generationPage); selectPage(page);
+  selectHudPage = selectPage; tabs.append(stateTab, generateTab, templateTab); body.append(frame, generationPage, templatePage); selectPage(page);
   frame.title = '世界状态栏编辑器';
   // Only the bundled frame may use this variable bridge; commands are allowlisted.
   const token = crypto.randomUUID();
@@ -110,7 +125,22 @@ async function showHud(page = selectedPage) {
   addEventListener('message', listener);
   dialog.addEventListener('close', () => { removeEventListener('message', listener); frame.srcdoc = ''; if (generationForm?.parentElement === generationPage) settingsHome?.append(generationForm); dialog.remove(); if (hudPanel === dialog) { hudPanel = null; selectHudPage = null; } }, { once: true });
   close.onclick = closeHud;
-  dialog.append(heading, tabs, body); document.body.append(dialog);
+  const quickActions = node('div', undefined, 'wsh-actions');
+  const quickStatus = node('p', '', 'wsh-quick-status'); quickStatus.setAttribute('role', 'status');
+  const update = node('button', '按当前剧情更新值', 'menu_button'); update.type = 'button';
+  update.onclick = async () => {
+    try { checkIdentity(id); update.disabled = true; quickStatus.textContent = '正在读取近期对话并更新…';
+      const result = await requestUpdate(); checkIdentity(id);
+      quickStatus.textContent = result?.ok ? (result.changed ? '数值已更新。' : '无需更新。') : result?.message || '更新未完成，请查看生成设置。';
+    } catch (e) { quickStatus.textContent = e.message; } finally { update.disabled = false; }
+  };
+  const copy = node('button', '复制模型更新提示词', 'menu_button'); copy.type = 'button';
+  copy.onclick = async () => {
+    try { const text = buildUpdatePrompt(readCurrent()); const ok = await copyPrompt(text); quickStatus.textContent = ok ? '已复制当前变量、路径与更新要求，可粘贴到对话。' : '请在弹窗中手动复制。'; }
+    catch (e) { quickStatus.textContent = e.message; }
+  };
+  quickActions.append(update, copy);
+  dialog.append(heading, tabs, quickActions, quickStatus, body); document.body.append(dialog);
   hudPanel = dialog; frame.srcdoc = html; dialog.show();
   enablePanelDrag(dialog, heading, { context, settingsKey: KEY });
 }
@@ -163,6 +193,7 @@ function mount() {
   field('apiKey', '独立 API 密钥（仅当前页面会话保存）', 'password').autocomplete = 'off';
   field('model', '独立接口模型 ID');
   field('extraBooks', '额外世界书（每行一本）', 'textarea');
+  field('updateNote', '当前情况补充（更新数值时使用，可留空）', 'textarea');
   field('instructions', '状态栏要求', 'textarea').placeholder = '例如：仅显示玩家、世界、队伍；不要数值化感情。';
   field('maxTokens', '最大输出 tokens', 'number').min = '256';
   field('maxSourceChars', '设定字符上限（超过会停止，不会截断）', 'number').min = '1000';
@@ -193,10 +224,13 @@ function mount() {
     try {
       const result = await generateStatus({ api: { baseUrl: s.baseUrl, apiKey: sessionKey, model: s.model, timeoutMs: 120000, maxTokens: s.maxTokens }, mode,
         includeGlobalBooks: s.includeGlobalBooks, extraBooks: s.extraBooks.split(/\r?\n/).map(x=>x.trim()).filter(Boolean), maxSourceChars: s.maxSourceChars,
-        instructions: s.instructions || '根据世界观设计简洁实用的状态栏。' }, running.signal);
-      report.textContent = result.ok ? (result.changed ? '生成完成，可打开状态栏查看。' : '无需补充。') + ' 读取世界书：' + (result.books?.join('、') || '无') : result.message || '已有任务运行中。';
+        updateNote: s.updateNote || '', instructions: s.instructions || '根据世界观设计简洁实用的状态栏。' }, running.signal);
+      report.textContent = result.ok ? (result.changed ? '操作完成，可打开状态栏查看。' : '没有需要修改的内容。') + ' 读取世界书：' + (result.books?.join('、') || '无') : result.message || '已有任务运行中。';
+      return result;
     } finally { running = null; generateButton.disabled = replaceButton.disabled = saveButton.disabled = false; }
   }
+  requestUpdate = () => generate('update');
+  action('按当前剧情更新值', requestUpdate);
   const generateButton = action('生成／补充', () => generate('fill'));
   const replaceButton = action('重新生成整套', () => generate('replace'));
   action('取消生成', () => { running?.abort(); report.textContent = '已请求取消，等待底层调用返回；结果不会写入。'; });
