@@ -42,11 +42,18 @@ export function readRules(ctx, settingsKey) {
   const key = ruleCardKey(ctx), all = ctx.extensionSettings[settingsKey]?.rulesByCharacter || {};
   return JSON.parse(JSON.stringify(Object.prototype.hasOwnProperty.call(all, key) && Array.isArray(all[key]) ? all[key] : []));
 }
+export function readGlobalRules(ctx, settingsKey) {
+  const rules = ctx.extensionSettings[settingsKey]?.globalRules;
+  return JSON.parse(JSON.stringify(Array.isArray(rules) ? rules : []));
+}
 export function compileRules(ctx, settingsKey, scope, expandNames = true) {
-  const rules = readRules(ctx, settingsKey).filter(r => r.enabled && (r.scope === 'both' || r.scope === scope) && r.content?.trim());
-  if (!rules.length) return '';
+  const applicable = rules => rules.filter(r => r.enabled && (r.scope === 'both' || r.scope === scope) && r.content?.trim());
+  const global = applicable(readGlobalRules(ctx, settingsKey)), character = applicable(readRules(ctx, settingsKey));
+  if (!global.length && !character.length) return '';
+  const section = (label, rules) => rules.length ? label + '\n' + rules.map((r, i) => `${i + 1}. ${r.title || '未命名规则'}\n${r.content}`).join('\n\n') : '';
   let text = '【用户设置的状态规则】\n这些规则仅规范状态栏字段的设计、初值和数值变化，不要求在剧情正文中逐条复述。遵守任务的输出格式和变量类型约束。规则给出的明确初值可作为初始化依据；更新时不重置已有值。\n'
-    + rules.map((r, i) => `${i + 1}. ${r.title || '未命名规则'}\n${r.content}`).join('\n\n');
+    + '全体规则与当前角色规则共同生效；对同一事项发生冲突时，以当前角色规则为准。\n'
+    + [section('【全体规则】', global), section('【当前角色规则】', character)].filter(Boolean).join('\n\n');
   if (expandNames) text = text.replace(/\{\{user\}\}/gi, () => ctx.name1 || '用户').replace(/\{\{char\}\}/gi, () => ctx.characters?.[ctx.characterId]?.name || ctx.name2 || '角色');
   if (text.length > 30000) throw Error('启用的状态规则超过 30000 字符，请精简或关闭部分条目。');
   return text;
@@ -55,17 +62,28 @@ export function compileRules(ctx, settingsKey, scope, expandNames = true) {
 export function createRulesPage({ context, settingsKey, node, check, syncWorldbook }) {
   const page = node('section', undefined, 'wsh-generation-page wsh-rules-page');
   const cardKey = ruleCardKey(context());
+  let collection = 'character';
   let rules = readRules(context(), settingsKey);
-  const status = node('p', '修改自动保存；本角色的不同聊天共用规则。', 'wsh-quick-status'); status.setAttribute('role', 'status');
+  const status = node('p', '修改自动保存；生成和更新会合并全体规则与当前角色规则。', 'wsh-quick-status'); status.setAttribute('role', 'status');
+  const collectionLabel = node('label', '规则分类'), collectionPicker = node('select', undefined, 'text_pole');
+  for (const [value, label] of [['global', '全体规则 · 所有角色共用'], ['character', '角色规则 · 仅当前角色']]) { const option = node('option', label); option.value = value; collectionPicker.append(option); }
+  collectionPicker.value = collection; collectionLabel.append(collectionPicker);
   const actions = node('div', undefined, 'wsh-actions'), list = node('div');
   function save() {
     check(); const ctx = context(); if (ruleCardKey(ctx) !== cardKey) throw Error('角色已切换，请重新打开规则页。');
     const settings = ctx.extensionSettings[settingsKey] ||= {};
-    settings.rulesByCharacter = { ...settings.rulesByCharacter, [cardKey]: JSON.parse(JSON.stringify(rules)) };
+    if (collection === 'global') settings.globalRules = JSON.parse(JSON.stringify(rules));
+    else settings.rulesByCharacter = { ...settings.rulesByCharacter, [cardKey]: JSON.parse(JSON.stringify(rules)) };
     ctx.saveSettingsDebounced();
     status.textContent = '已保存。生成和更新立即使用；日常聊天需点击“同步到世界书”更新已写入的规则。';
   }
   function protect(fn) { return () => { try { check(); fn(); } catch (e) { status.textContent = e.message; } }; }
+  collectionPicker.onchange = protect(() => {
+    collection = collectionPicker.value;
+    rules = collection === 'global' ? readGlobalRules(context(), settingsKey) : readRules(context(), settingsKey);
+    render();
+    status.textContent = collection === 'global' ? '正在编辑全体规则，修改适用于所有角色。' : '正在编辑当前角色规则，旧版本规则保留在这里。';
+  });
   function action(label, fn) { const b = node('button', label, 'menu_button'); b.type = 'button'; b.onclick = protect(fn); actions.append(b); return b; }
   function add(sample = false) {
     const id = crypto.randomUUID();
@@ -101,7 +119,7 @@ export function createRulesPage({ context, settingsKey, node, check, syncWorldbo
       card.append(titleLabel, enabledLabel, scopeLabel, contentLabel, remove); list.append(card);
     }
   }
-  page.append(node('h3', '状态规则库'), node('p', '按角色保存的常驻提示词条目。只启用适合当前世界观的规则；支持 {{user}} 和 {{char}}。', 'wsh-note'), actions, status,
+  page.append(node('h3', '状态规则库'), node('p', '全体规则与当前角色规则共同参与按设定生成、补充和更新；冲突时提示模型优先遵守角色规则。支持 {{user}} 和 {{char}}。日常聊天需同步到各角色绑定的世界书。', 'wsh-note'), collectionLabel, actions, status,
     node('p', '规则是模型提示，不是代码强制约束。1D3 不代表插件实际掷骰。示例按原文保留：正向最后一档为 101～120。多个角色共用同一本世界书时，最近同步的更新规则也会被其他绑定角色使用。', 'wsh-note'), list);
   render(); return page;
 }
