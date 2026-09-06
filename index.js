@@ -1,5 +1,6 @@
 import { generateStatus } from './generator.js';
 import { installFloatingButton } from './floating.js';
+import { enablePanelDrag } from './drag-panel.js';
 import { setLocalVariable } from '/scripts/variables.js';
 
 const KEY = 'world_status_hud_v1';
@@ -80,6 +81,7 @@ async function showHud() {
   close.onclick = closeHud;
   dialog.append(heading, frame); document.body.append(dialog);
   hudPanel = dialog; frame.srcdoc = html; dialog.show();
+  enablePanelDrag(dialog, heading, { context, settingsKey: KEY });
 }
 async function restoreBackup() {
   if (running) throw Error('请先等待生成结束。');
