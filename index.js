@@ -1,10 +1,13 @@
 import { generateStatus } from './generator.js';
+import { installFloatingButton } from './floating.js';
 import { setLocalVariable } from '/scripts/variables.js';
 
 const KEY = 'world_status_hud_v1';
 const context = () => SillyTavern.getContext();
 let running = null;
 let sessionKey = '';
+let hudPanel = null;
+let hudEpoch = 0;
 const defaults = { baseUrl: '', model: '', includeGlobalBooks: true, extraBooks: '', instructions: '', maxTokens: 4096, maxSourceChars: 100000 };
 const getSettings = () => ({ ...defaults, ...context().extensionSettings[KEY] });
 function node(tag, text, className) {
@@ -29,14 +32,23 @@ function parseState(raw) {
   if (!d || Array.isArray(d) || typeof d.项目 !== 'object' || !d.项目 || Array.isArray(d.项目)) throw Error('状态栏结构不兼容。');
   return d;
 }
+function closeHud() {
+  hudEpoch++;
+  hudPanel?.close();
+}
 async function showHud() {
+  closeHud();
+  const epoch = hudEpoch;
   const id = identity();
   const response = await fetch(new URL('./hud.html', import.meta.url));
   if (!response.ok) throw Error('无法加载状态栏界面。');
   let html = await response.text();
+  if (epoch !== hudEpoch) return;
   checkIdentity(id);
   const dialog = node('dialog', undefined, 'wsh-dialog');
   const close = node('button', '关闭', 'menu_button');
+  const heading = node('div', undefined, 'wsh-panel-heading');
+  heading.append(node('strong', context().characters[context().characterId].name + ' · 当前聊天状态'), close);
   const frame = node('iframe');
   frame.title = '世界状态栏编辑器';
   // Only the bundled frame may use this variable bridge; commands are allowlisted.
@@ -64,10 +76,10 @@ async function showHud() {
     } catch (e) { event.source.postMessage({ wsh: token, id: requestId, error: e.message }, '*'); }
   };
   addEventListener('message', listener);
-  dialog.addEventListener('close', () => { removeEventListener('message', listener); frame.srcdoc = ''; dialog.remove(); }, { once: true });
-  close.onclick = () => dialog.close();
-  dialog.append(close, frame); document.body.append(dialog);
-  frame.srcdoc = html; dialog.showModal();
+  dialog.addEventListener('close', () => { removeEventListener('message', listener); frame.srcdoc = ''; dialog.remove(); if (hudPanel === dialog) hudPanel = null; }, { once: true });
+  close.onclick = closeHud;
+  dialog.append(heading, frame); document.body.append(dialog);
+  hudPanel = dialog; frame.srcdoc = html; dialog.show();
 }
 async function restoreBackup() {
   if (running) throw Error('请先等待生成结束。');
@@ -128,7 +140,7 @@ function mount() {
       s[k] = input.type === 'checkbox' ? input.checked : input.type === 'number' ? Number(input.value) : input.value;
     }
     if (!Number.isFinite(s.maxTokens) || s.maxTokens < 256 || !Number.isFinite(s.maxSourceChars) || s.maxSourceChars < 1000) throw Error('请检查输出长度和设定字符上限。');
-    context().extensionSettings[KEY] = s; context().saveSettingsDebounced(); return s;
+    context().extensionSettings[KEY] = { ...context().extensionSettings[KEY], ...s }; context().saveSettingsDebounced(); return s;
   }
   const actions = node('div', undefined, 'wsh-actions');
   function action(label, fn) {
@@ -156,5 +168,10 @@ function mount() {
   action('恢复备份', restoreBackup);
   panel.append(actions, report, node('p', '独立接口使用 Chat Completions 格式，需要允许浏览器跨域。生成与编辑共用聊天变量“状态栏”。', 'wsh-note'));
   host.append(panel);
+  installFloatingButton({ context, settingsKey: KEY, identity,
+    toggle: async () => { if (hudPanel) closeHud(); else await showHud(); },
+    changed: async () => { const wasOpen = !!hudPanel; closeHud(); if (wasOpen) { try { await showHud(); } catch (e) { notify(e.message); } } },
+    error: e => notify(e.message, true),
+  });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true }); else mount();
