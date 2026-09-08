@@ -1,4 +1,6 @@
-# 世界状态栏 V1.8 — SillyTavern 扩展
+# 世界状态栏 V1.8.1 — SillyTavern 扩展
+
+V1.8.1：移除顶部扩展面板中重复的状态栏配置入口。全部功能通过悬浮按钮进入，关闭再打开窗口保留配置草稿。插件加载不再依赖扩展设置容器。
 
 V1.8：状态规则页增加“规则分类”选择器：全体规则供当前酒馆用户的所有角色共用，角色规则仅用于当前角色（同卡不同聊天共用）。旧条目原样保留为角色规则，无需迁移。
 
@@ -21,7 +23,7 @@ V1.7.1：修正规则页表单被酒馆主题深色背景覆盖的问题。输�
 https://github.com/agentgeleven-lab/world-status-hud
 ```
 
-安装完成后刷新，在扩展设置中点击“世界状态栏 · V1”标题展开配置。
+安装完成后刷新，打开悬浮状态按钮，在窗口的“生成”和“设置”页配置。
 
 ### 手动安装
 
@@ -30,7 +32,7 @@ https://github.com/agentgeleven-lab/world-status-hud
    默认用户通常是 `data/default-user/extensions/`；以你的实际目录为准。
    也可按全用户方式放到 `public/scripts/extensions/third-party/`。
 3. 确保最终是 `extensions/world-status-hud/manifest.json`，不要多套一层文件夹。
-4. 刷新酒馆，在“扩展设置”找到“世界状态栏 · V1”。
+4. 刷新酒馆，点击悬浮状态按钮进入窗口。
 
 手动安装时不能把 ZIP 路径填进 Git 仓库安装框。
 TauriTavern 本地扩展也使用其实际数据目录下的 `default-user/extensions/`；全局扩展使用数据目录下 `extensions/third-party/`，不要放进程序自带的 default 模板目录。
@@ -74,7 +76,7 @@ TauriTavern 本地扩展也使用其实际数据目录下的 `default-user/exten
 ### 一键写入角色世界书（V1.5）
 
 1. 在角色卡中绑定主世界书，打开该角色的聊天。
-2. 点击悬浮“状态”按钮 → **设置 → 写入世界书更新提示词**。生成设置和扩展设置中的同名按钮也可使用。
+2. 点击悬浮“状态”按钮 → **设置 → 写入世界书更新提示词**。窗口生成页中的同名按钮也可使用。
 3. 按钮在绑定的主世界书中新增 **世界状态栏 · 变量更新规则**，启用常驻（蓝灯），位置为角色定义之后。完成提示会显示世界书名及条目 UID。
 
 条目使用 `{{xbgetvar_yaml_idx::状态栏}}` 动态读取本轮变量，并包含 `<state>` 更新语法、五种类型规则、避免重复增减、保护现有字段等要求。不会把当前数值固定写进世界书，也不会把浏览中的历史记录发给模型。没有当前状态时会让模型等待初始化。
@@ -198,5 +200,6 @@ TauriTavern 本地扩展也使用其实际数据目录下的 `default-user/exten
 
 参考：[酒馆扩展文档](https://docs.sillytavern.app/for-contributors/writing-extensions/)、
 [小白X变量文档](https://docs.littlewhitebox.qzz.io/数据互动/变量管理2.0)。
+
 
 

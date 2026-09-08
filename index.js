@@ -16,7 +16,7 @@ let running = null;
 let sessionKey = '';
 let hudPanel = null;
 let hudEpoch = 0;
-let generationForm, settingsHome;
+let generationForm, formHome;
 let selectedPage = 'state';
 let selectHudPage = null;
 let requestUpdate = null;
@@ -180,7 +180,7 @@ async function showHud(page = selectedPage) {
     } catch (e) { event.source.postMessage({ wsh: token, id: requestId, error: e.message }, '*'); }
   };
   addEventListener('message', listener);
-  dialog.addEventListener('close', () => { recordsView.dispose(); removeEventListener('message', listener); frame.srcdoc = ''; if (generationForm?.parentElement === generationPage) settingsHome?.append(generationForm); dialog.remove(); if (hudPanel === dialog) { hudPanel = null; selectHudPage = null; } }, { once: true });
+  dialog.addEventListener('close', () => { recordsView.dispose(); removeEventListener('message', listener); frame.srcdoc = ''; if (generationForm?.parentElement === generationPage) formHome?.append(generationForm); dialog.remove(); if (hudPanel === dialog) { hudPanel = null; selectHudPage = null; } }, { once: true });
   close.onclick = closeHud;
   const quickActions = node('div', undefined, 'wsh-actions');
   const quickStatus = node('p', '', 'wsh-quick-status'); quickStatus.setAttribute('role', 'status');
@@ -229,13 +229,9 @@ async function restoreBackup() {
   d.append(title, select, restore, cancel, result); document.body.append(d); d.showModal();
 }
 function mount() {
-  if (document.getElementById('wsh-settings')) return;
-  const host = document.getElementById('extensions_settings2') || document.getElementById('extensions_settings');
-  if (!host) { notify('未找到扩展设置容器，请刷新酒馆。', true); return; }
-  const panel = node('details'); panel.id = 'wsh-settings';
-  panel.append(node('summary', '世界状态栏 · V1'));
-  panel.append(node('p', '读取角色卡与关联世界书，生成适合当前世界观的状态栏。'));
-  settingsHome = panel;
+  if (generationForm) return;
+  // Keep the shared form detached while the floating window is closed.
+  formHome = node('div');
   generationForm = node('div', undefined, 'wsh-generation-form');
   generationForm.append(node('h3', '按设定生成状态栏'), node('p', '读取当前角色卡与关联世界书，生成后可切回“状态栏”查看。'));
   const fields = {};
@@ -295,8 +291,7 @@ function mount() {
   action('恢复备份', restoreBackup);
   action('写入世界书更新提示词', async () => { report.textContent = await writeUpdateWorldbook(); });
   generationForm.append(actions, report, node('p', '独立接口使用 Chat Completions 格式，需要允许浏览器跨域。生成与编辑共用聊天变量“状态栏”。', 'wsh-note'));
-  panel.append(generationForm);
-  host.append(panel);
+  formHome.append(generationForm);
   applyTheme(document, getSettings().theme);
   syncHistory();
   const ctx = context(); const events = ctx.eventTypes || ctx.event_types || {};
@@ -309,3 +304,4 @@ function mount() {
   });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true }); else mount();
+
