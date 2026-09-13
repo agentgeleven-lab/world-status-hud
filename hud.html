@@ -37,6 +37,8 @@ let view={layout:'cards',order:[],closed:[]},previous=null,changes=new Map();
 try{const saved=JSON.parse(localStorage.getItem(viewKey));if(saved&&['cards','compact','profile'].includes(saved.layout)&&Array.isArray(saved.order)&&Array.isArray(saved.closed))view=saved;}catch{}
 function saveView(){try{localStorage.setItem(viewKey,JSON.stringify(view));}catch{}}
 function moveProject(p,offset){const order=Object.keys(data.项目).sort((a,b)=>rank(a)-rank(b)),i=order.indexOf(p),j=i+offset;if(j<0||j>=order.length)return;[order[i],order[j]]=[order[j],order[i]];view.order=order;saveView();render();}
+function fieldKeys(p){const stored=view.fieldOrder&&own(view.fieldOrder,p)&&Array.isArray(view.fieldOrder[p])?view.fieldOrder[p]:[];const index=k=>{const i=stored.indexOf(k);return i<0?Infinity:i;};return Object.keys(data.项目[p]).sort((a,b)=>index(a)-index(b));}
+function moveField(p,k,offset){const order=fieldKeys(p),i=order.indexOf(k),j=i+offset;if(i<0||j<0||j>=order.length)return;[order[i],order[j]]=[order[j],order[i]];view.fieldOrder={...view.fieldOrder,[p]:order};saveView();render();}
 function rank(p){const i=view.order.indexOf(p);return i<0?99999:i;}
 function render(){
  const now=Date.now();for(const [key,c]of changes)if(c.until<=now)changes.delete(key);
@@ -56,7 +58,7 @@ function render(){
   if(editing){head.append(button('↑',()=>moveProject(p,-1)),button('↓',()=>moveProject(p,1)),button('删除项目',()=>remove(p),'danger'));}
   card.append(head,body);
   const paired=!editing&&typeof vars.好感度==='number'&&typeof vars.好感阶段==='string';
-  for(const [k,v]of Object.entries(vars)){
+  for(const k of fieldKeys(p)){const v=vars[k];
    if(paired&&k==='好感阶段')continue;
    const row=el('div','row'),t=kind(v);row.append(el('div','label',k));
    if(!editing&&t==='text'&&v.length<=14&&!v.includes('\n'))row.classList.add('short-row');
@@ -68,7 +70,7 @@ function render(){
     row.append(el('div','value number',v.当前+' / '+v.最大));const track=el('div','track'),fill=el('div','fill');fill.style.width=(v.当前/v.最大*100)+'%';track.setAttribute('role','progressbar');track.setAttribute('aria-label',k);track.setAttribute('aria-valuenow',v.当前);track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax',v.最大);track.append(fill);row.append(track);
    }else row.append(el('div',t==='number'?'value number':t==='boolean'?'value chip':'value',t==='boolean'?(v?'● 是':'○ 否'):t==='unknown'?JSON.stringify(v):v===''?'—':v));
    for(const key of paired&&k==='好感度'?[k,'好感阶段']:[k]){const change=changes.get(JSON.stringify([p,key]));if(change&&change.until>now){row.classList.add('changed');row.append(el('span','change-note',key+' '+change.text));}}
-   if(editing){const actions=el('div','actions');if(t!=='unknown')actions.append(button('编辑',()=>openEditor(p,k)));else actions.append(el('span','meta','非 V1 类型 · 只读保留'));actions.append(button('删除',()=>remove(p,k),'danger'));row.append(actions);}body.append(row);
+   if(editing){const actions=el('div','actions');const up=button('↑ 上移',()=>moveField(p,k,-1)),down=button('↓ 下移',()=>moveField(p,k,1));up.setAttribute('aria-label','上移 '+k);down.setAttribute('aria-label','下移 '+k);actions.append(up,down);if(t!=='unknown')actions.append(button('编辑',()=>openEditor(p,k)));else actions.append(el('span','meta','非 V1 类型 · 只读保留'));actions.append(button('删除',()=>remove(p,k),'danger'));row.append(actions);}body.append(row);
   }
   if(editing)body.append(button('＋ 添加变量',()=>openEditor(p),'add'));cards.append(card);
  }
