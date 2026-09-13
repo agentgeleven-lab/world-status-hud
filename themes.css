@@ -41,3 +41,27 @@ html[data-wsh-frame] header{padding:18px}html[data-wsh-frame] h1{font-size:21px}
 @media(max-width:420px){.wsh-theme-grid{grid-template-columns:1fr}html[data-wsh-theme] .wsh-history-field{gap:12px;font-size:12px}html[data-wsh-frame] body{padding:4px}html[data-wsh-frame] #cards{grid-template-columns:1fr}}
 
 html[data-wsh-theme] .wsh-history-long{flex-direction:column;gap:5px}html[data-wsh-theme] .wsh-history-long>span:last-child{text-align:left}html[data-wsh-frame] .project-toggle{color:var(--wsh-accent)!important}html[data-wsh-frame] .scene-item{color:var(--wsh-text)}
+
+/* Shape and material are independent of color palettes. */
+html[data-wsh-style]{--wsh-radius:4px}
+html[data-wsh-style] :is(.wsh-dialog,.wsh-restore,.wsh-dialog button,.wsh-dialog input,.wsh-dialog select,.wsh-dialog textarea,.wsh-rule-card,.wsh-history-card,.wsh-theme-choice){border-radius:4px}
+html[data-wsh-frame][data-wsh-style] :is(.hud,.card,button,input,select,textarea,#editor,.chip,#scene){border-radius:4px}
+.wsh-style-choice{padding:16px!important;text-align:left;min-width:0;line-height:1.8}.wsh-style-choice strong{display:block}.wsh-style-choice[aria-pressed=true]{outline:2px solid var(--wsh-accent);outline-offset:2px}
+[data-wsh-style-preview=paper]{border-style:double!important;border-width:3px!important;font-family:Georgia,serif!important}
+[data-wsh-style-preview=tech]{clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+[data-wsh-style-preview=dossier]{border-left:5px solid var(--wsh-accent)!important}
+[data-wsh-style-preview=terminal]{font-family:Consolas,monospace!important;border-style:dashed!important}
+[data-wsh-style-preview=flat]{border-color:transparent!important;border-bottom-color:var(--wsh-line)!important;box-shadow:none!important}
+html[data-wsh-style=paper] :is(.card,.wsh-history-card,.wsh-rule-card,.wsh-template-preview){border:3px double var(--wsh-line);background-color:var(--wsh-card);box-shadow:0 2px 5px #00000008}
+html[data-wsh-style=paper] :is(.project-toggle,.wsh-history-card>strong,.wsh-rule-title,.wsh-panel-heading){font-family:Georgia,"Noto Serif SC",SimSun,serif;letter-spacing:.06em}
+html[data-wsh-style=tech] :is(.card,.wsh-history-card,.wsh-rule-card,.wsh-template-preview){border-radius:0;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border-top:2px solid var(--wsh-accent);background-image:linear-gradient(var(--wsh-line) 1px,transparent 1px);background-size:100% 32px}
+html[data-wsh-style=dossier] :is(.card,.wsh-history-card,.wsh-rule-card,.wsh-template-preview){border-radius:0;border-left:5px solid var(--wsh-accent);box-shadow:3px 3px 0 var(--wsh-line)}
+html[data-wsh-style=dossier] #cards{counter-reset:dossier}html[data-wsh-style=dossier] .card{counter-increment:dossier}html[data-wsh-style=dossier] .project-toggle::before{content:counter(dossier,decimal-leading-zero) " / ";font-size:12px;opacity:.6}
+html[data-wsh-style=terminal] :is(.hud,.wsh-dialog,.wsh-history){font-family:Consolas,"Microsoft YaHei",monospace}
+html[data-wsh-style=terminal] :is(.card,.wsh-history-card,.wsh-rule-card,.wsh-template-preview){border-radius:0;box-shadow:none;border-style:dashed}
+html[data-wsh-style=terminal] .project-toggle::before{content:"> ";color:var(--wsh-accent)}
+html[data-wsh-style=flat] :is(.card,.wsh-history-card,.wsh-rule-card,.wsh-template-preview){border-radius:0;border:0;border-bottom:1px solid var(--wsh-line);box-shadow:none;background:transparent}
+html[data-wsh-style=flat] :is(.hud,.wsh-dialog){background:var(--wsh-bg);box-shadow:none}
+html[data-wsh-style=flat] .card>.heading{border-left:0;padding-left:0}
+html[data-wsh-style]:not([data-wsh-style=paper]) :is(.card,.wsh-history-card,.wsh-rule-card,.wsh-template-preview){border-radius:0!important}
+html[data-wsh-style] .wsh-dialog .wsh-theme-choice{border-radius:4px}

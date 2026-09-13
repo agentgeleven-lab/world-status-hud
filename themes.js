@@ -37,3 +37,28 @@ export function createThemePicker({ node, context, settingsKey, document }) {
   }
   select(normalizeTheme(context().extensionSettings[settingsKey]?.theme)); section.append(choices); return section;
 }
+export const STYLES = [
+  {id:'paper',name:'古典书页',note:'小圆角 · 双线边框 · 衬线标题'},
+  {id:'tech',name:'切角科技',note:'斜切卡片 · 细网格 · 高亮边线'},
+  {id:'dossier',name:'角色档案',note:'直角 · 编号标题 · 装订边'},
+  {id:'terminal',name:'终端面板',note:'直角线框 · 等宽字体 · 终端标记'},
+  {id:'flat',name:'极简平面',note:'弱化边框 · 清爽留白 · 细分隔线'},
+];
+export const normalizeStyle = id => STYLES.some(s=>s.id===id)?id:'paper';
+export function applyStyle(document,id){
+  const style=normalizeStyle(id);document.documentElement.setAttribute('data-wsh-style',style);
+  for(const frame of document.querySelectorAll('.wsh-dialog iframe')){try{frame.contentDocument?.documentElement?.setAttribute('data-wsh-style',style);}catch{}}
+  return style;
+}
+export function createStylePicker({node,context,settingsKey,document}){
+  const section=node('section',undefined,'wsh-style-section'),grid=node('div',undefined,'wsh-theme-grid'),buttons=[];
+  section.append(node('h3','面板款式'),node('p','款式决定边框、底纹与排版，可与任意配色搭配。默认使用古典书页的小圆角。','wsh-note'));
+  function select(id){for(const [button,key]of buttons)button.setAttribute('aria-pressed',String(id===key));}
+  for(const style of STYLES){
+    const button=node('button',undefined,'wsh-style-choice');button.type='button';button.setAttribute('data-wsh-style-preview',style.id);
+    button.append(node('strong',style.name),node('span',style.note,'wsh-theme-note'));
+    button.onclick=()=>{const ctx=context();ctx.extensionSettings[settingsKey]={...ctx.extensionSettings[settingsKey],panelStyle:style.id};applyStyle(document,style.id);select(style.id);ctx.saveSettingsDebounced();};
+    grid.append(button);buttons.push([button,style.id]);
+  }
+  select(normalizeStyle(context().extensionSettings[settingsKey]?.panelStyle));section.append(grid);return section;
+}

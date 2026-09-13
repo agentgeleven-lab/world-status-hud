@@ -1,5 +1,5 @@
 import { compileRules, createRulesPage } from './rules.js';
-import { applyTheme, createThemePicker, normalizeTheme } from './themes.js';
+import { applyTheme, createThemePicker, normalizeTheme, applyStyle, createStylePicker, normalizeStyle } from './themes.js';
 import { installUpdateEntry, boundWorldbook } from './lorebook.js';
 import { createHistory } from './history.js';
 import { historyView, installFloorButtons } from './history-ui.js';
@@ -54,7 +54,7 @@ function createDisplaySettings() {
   const label = node('label', '在消息末尾显示小型状态按钮'); const input = node('input'); input.type = 'checkbox'; input.checked = getSettings().floorButtons;
   input.onchange = () => { context().extensionSettings[KEY] = { ...context().extensionSettings[KEY], floorButtons: input.checked }; context().saveSettingsDebounced(); floorButtons.refresh(); };
   label.append(input); page.append(node('h3', '显示与记录设置'), label, node('p', '楼层记录随当前聊天自动保存。关闭按钮只隐藏入口，仍可在“楼层记录”中查看。'), node('p', '翻页仅浏览；删除后续消息、回退剧情时才恢复末尾楼层的变量。没有记录的旧楼层不会自动推测数值。'));
-  page.append(createThemePicker({ node, context, settingsKey: KEY, document }), createLorebookControl());
+  page.append(createThemePicker({ node, context, settingsKey: KEY, document }), createStylePicker({ node, context, settingsKey: KEY, document }), createLorebookControl());
   return page;
 }
 let writingLorebook = false;
@@ -161,7 +161,7 @@ async function showHud(page = selectedPage) {
   window.STscript=command=>new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>{pending.delete(id);reject(Error('连接超时，请重新打开面板。'))},15000);pending.set(id,{resolve,reject,timer});parent.postMessage({wsh:token,id,command},'*')});
   addEventListener('message',e=>{if(e.source!==parent||e.data?.wsh!==token)return;const p=pending.get(e.data.id);if(!p)return;clearTimeout(p.timer);pending.delete(e.data.id);e.data.error?p.reject(Error(e.data.error)):p.resolve(e.data.value)});
   <\/script>`;
-  html = html.replace('<html lang="zh-CN">', '<html lang="zh-CN" data-wsh-frame data-wsh-theme="' + normalizeTheme(getSettings().theme) + '">');
+  html = html.replace('<html lang="zh-CN">', '<html lang="zh-CN" data-wsh-frame data-wsh-style="' + normalizeStyle(getSettings().panelStyle) + '" data-wsh-theme="' + normalizeTheme(getSettings().theme) + '">');
   html = html.replace('</head>', '<link rel="stylesheet" href="' + new URL('./themes.css', import.meta.url).href + '"></head>');
   html = html.replace('<head>', '<head>' + bridge);
   const listener = event => {
@@ -294,6 +294,7 @@ function mount() {
   generationForm.append(actions, report, node('p', '独立接口使用 Chat Completions 格式，需要允许浏览器跨域。生成与编辑共用聊天变量“状态栏”。', 'wsh-note'));
   formHome.append(generationForm);
   applyTheme(document, getSettings().theme);
+  applyStyle(document, getSettings().panelStyle);
   syncHistory();
   const ctx = context(); const events = ctx.eventTypes || ctx.event_types || {};
   for (const name of ['CHAT_CHANGED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'GENERATION_ENDED', 'CHARACTER_MESSAGE_RENDERED']) { if (events[name]) ctx.eventSource?.on(events[name], syncHistory); }
