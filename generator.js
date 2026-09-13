@@ -1,3 +1,4 @@
+import { checkpointState } from './state-checkpoint.js';
 import { mergeUpdates } from './state-tools.js';
 export async function generateStatus(CONFIG, signal) {
 const LOCK = '__LWB_HUD_BUILDER_V1_RUNNING__';
@@ -250,6 +251,7 @@ try {
   const backupKey = '状态栏_生成前备份_' + Date.now();
   if (latest !== null) vars.setLocalVariable(backupKey, JSON.stringify(latest));
   vars.setLocalVariable('状态栏', JSON.stringify(finalState));
+  checkpointState(ctx);
   if (!equal(readState(), finalState)) throw Error('本地写入后校验失败，请检查变量面板及生成前备份。');
   // setLocalVariable 本身会安排酒馆保存；此处主动等待当前聊天元数据保存。
   try { await ctx.saveMetadata(); }

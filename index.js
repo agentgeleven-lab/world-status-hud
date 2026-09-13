@@ -1,3 +1,4 @@
+import { checkpointState } from './state-checkpoint.js';
 import { compileRules, createRulesPage } from './rules.js';
 import { applyTheme, createThemePicker, normalizeTheme, applyStyle, createStylePicker, normalizeStyle, applyGlass, glassSettings, createGlassSettings } from './themes.js';
 import { installUpdateEntry, boundWorldbook } from './lorebook.js';
@@ -116,7 +117,7 @@ async function showHud(page = selectedPage) {
       checkIdentity(id); if (running) throw Error('模型任务运行中，请稍后应用模板。');
       const old = id.metadata.variables?.状态栏;
       if (old !== undefined) setLocalVariable('状态栏_生成前备份_' + Date.now(), old);
-      setLocalVariable('状态栏', JSON.stringify(value)); history.sync(); await context().saveMetadata();
+      setLocalVariable('状态栏', JSON.stringify(value)); checkpointState(context()); history.sync(); await context().saveMetadata();
     }, isRunning: () => !!running, node });
   templatePage.id = 'wsh-template-page'; templatePage.setAttribute('role', 'tabpanel'); templatePage.setAttribute('aria-labelledby', templateTab.id);
   templateTab.setAttribute('aria-controls', templatePage.id);
@@ -176,7 +177,7 @@ async function showHud(page = selectedPage) {
         if (running) throw Error('状态栏生成中，请完成后再编辑。');
         value = parseState(command.slice('/setvar key=状态栏 '.length));
         if (!value) throw Error('不能写入空状态。');
-        setLocalVariable('状态栏', JSON.stringify(value)); history.sync();
+        setLocalVariable('状态栏', JSON.stringify(value)); checkpointState(context()); history.sync();
       } else throw Error('不支持的状态栏命令。');
       event.source.postMessage({ wsh: token, id: requestId, value }, '*');
     } catch (e) { event.source.postMessage({ wsh: token, id: requestId, error: e.message }, '*'); }
@@ -207,11 +208,13 @@ async function restoreBackup() {
   if (running) throw Error('请先等待生成结束。');
   const id = identity();
   const backups = Object.keys(id.metadata.variables || {}).filter(k => k.startsWith('状态栏_生成前备份_')).sort().reverse();
-  if (!backups.length) throw Error('当前聊天没有生成前备份。');
+  const candidates = new Map(backups.map(k => [k, id.metadata.variables[k]]));
+  for (const row of history.list()) { if (row.available && row.state) candidates.set(`楼层记录 · 第 ${row.index + 1} 楼 · ${row.name}`, JSON.stringify(row.state)); }
+  if (!candidates.size) throw Error('当前聊天没有备份或楼层记录。');
   const d = node('dialog', undefined, 'wsh-restore');
   const title = node('h3', '恢复状态栏备份');
   const select = node('select', undefined, 'text_pole');
-  backups.forEach(k => { const o = node('option', k); o.value = k; select.append(o); });
+  [...candidates.keys()].forEach(k => { const o = node('option', k); o.value = k; select.append(o); });
   const restore = node('button', '恢复所选备份', 'menu_button');
   const cancel = node('button', '取消', 'menu_button');
   const result = node('p');
@@ -219,16 +222,16 @@ async function restoreBackup() {
     try {
       checkIdentity(id);
       if (running) throw Error('生成正在运行，请稍后恢复。');
-      const restored = parseState(id.metadata.variables[select.value]);
+      const restored = parseState(candidates.get(select.value));
       if (!restored) throw Error('备份为空。');
       const current = id.metadata.variables.状态栏;
       if (current !== undefined) setLocalVariable('状态栏_生成前备份_' + Date.now(), current);
-      setLocalVariable('状态栏', JSON.stringify(restored));
+      setLocalVariable('状态栏', JSON.stringify(restored)); checkpointState(context());
       await context().saveMetadata(); d.close(); notify('已恢复，恢复前的状态也已备份。');
     } catch (e) { result.textContent = e.message; }
   };
   cancel.onclick = () => d.close(); d.onclose = () => d.remove();
-  d.append(title, select, restore, cancel, result); document.body.append(d); d.showModal();
+  d.append(title, node('p', '恢复会用所选完整状态覆盖当前值，并先备份当前状态。楼层记录只在点击恢复后才应用；不会回退聊天正文。'), select, restore, cancel, result); document.body.append(d); d.showModal();
 }
 function mount() {
   if (generationForm) return;
