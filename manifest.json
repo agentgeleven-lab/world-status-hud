@@ -6,9 +6,10 @@
   "js": "index.js",
   "css": "style.css",
   "author": "agentgeleven-lab",
-  "version": "1.11.2",
+  "version": "1.11.3",
   "homePage": "https://github.com/agentgeleven-lab/world-status-hud"
 }
+
 
 
 
