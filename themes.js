@@ -62,3 +62,17 @@ export function createStylePicker({node,context,settingsKey,document}){
   }
   select(normalizeStyle(context().extensionSettings[settingsKey]?.panelStyle));section.append(grid);return section;
 }
+export function glassSettings(settings={}) {
+  return {enabled:settings.glassEnabled===true,transparency:Number.isFinite(settings.glassTransparency)?Math.max(10,Math.min(80,settings.glassTransparency)):35};
+}
+export function applyGlass(document,settings){
+  const glass=glassSettings(settings);
+  function apply(doc){doc.documentElement.setAttribute('data-wsh-glass',glass.enabled?'on':'off');doc.documentElement.style.setProperty('--wsh-glass-opacity',(100-glass.transparency)+'%');}
+  apply(document);for(const frame of document.querySelectorAll('.wsh-dialog iframe')){try{if(frame.contentDocument)apply(frame.contentDocument);}catch{}}
+}
+export function createGlassSettings({node,context,settingsKey,document}){
+  const section=node('section'),title=node('h3','毛玻璃窗口'),label=node('label','启用半透明与背景模糊'),toggle=node('input'),rangeLabel=node('label','背景透明度'),range=node('input'),value=node('span');
+  const initial=glassSettings(context().extensionSettings[settingsKey]);toggle.type='checkbox';toggle.checked=initial.enabled;range.type='range';range.min='10';range.max='80';range.step='5';range.value=initial.transparency;range.disabled=!initial.enabled;value.textContent=initial.transparency+'%';
+  function save(){const ctx=context();const s={...ctx.extensionSettings[settingsKey],glassEnabled:toggle.checked,glassTransparency:Number(range.value)};ctx.extensionSettings[settingsKey]=s;range.disabled=!toggle.checked;value.textContent=range.value+'%';applyGlass(document,s);ctx.saveSettingsDebounced();}
+  toggle.onchange=save;range.oninput=save;label.append(toggle);rangeLabel.append(range,value);section.append(title,label,rangeLabel,node('p','透明度越高，聊天背景越明显。文字保持清晰；关闭可恢复实心背景。','wsh-note'));return section;
+}

@@ -65,3 +65,8 @@ html[data-wsh-style=flat] :is(.hud,.wsh-dialog){background:var(--wsh-bg);box-sha
 html[data-wsh-style=flat] .card>.heading{border-left:0;padding-left:0}
 html[data-wsh-style]:not([data-wsh-style=paper]) :is(.card,.wsh-history-card,.wsh-rule-card,.wsh-template-preview){border-radius:0!important}
 html[data-wsh-style] .wsh-dialog .wsh-theme-choice{border-radius:4px}
+/* Blur is applied at the outer window, so the transparent iframe reveals the same backdrop. */
+html[data-wsh-glass=on] .wsh-dialog{background:color-mix(in srgb,var(--wsh-bg) var(--wsh-glass-opacity,65%),transparent)!important;backdrop-filter:blur(16px) saturate(115%);-webkit-backdrop-filter:blur(16px) saturate(115%)}
+html[data-wsh-frame][data-wsh-glass=on],html[data-wsh-frame][data-wsh-glass=on] body,html[data-wsh-frame][data-wsh-glass=on] .hud{background:transparent!important}
+html[data-wsh-glass=on] .wsh-dialog :is(.wsh-rule-card,.wsh-history-card,.wsh-template-preview),html[data-wsh-frame][data-wsh-glass=on] .card{background-color:color-mix(in srgb,var(--wsh-card) 18%,transparent)!important}
+@supports not (background:color-mix(in srgb,black 50%,transparent)){html[data-wsh-glass=on] .wsh-dialog{background:var(--wsh-bg)!important}}
