@@ -1,4 +1,3 @@
-import { createMapLink } from './map-link.js';
 import { compileRules, createRulesPage } from './rules.js';
 import { applyTheme, createThemePicker, normalizeTheme } from './themes.js';
 import { installUpdateEntry, boundWorldbook } from './lorebook.js';
@@ -121,7 +120,6 @@ async function showHud(page = selectedPage) {
     }, isRunning: () => !!running, node });
   templatePage.id = 'wsh-template-page'; templatePage.setAttribute('role', 'tabpanel'); templatePage.setAttribute('aria-labelledby', templateTab.id);
   templateTab.setAttribute('aria-controls', templatePage.id);
-  const mapLink=createMapLink({check:()=>checkIdentity(id),open:()=>closeHud()});
   const frame = node('iframe');
   frame.addEventListener('load', () => { try { frame.contentDocument?.documentElement?.setAttribute('data-wsh-theme', normalizeTheme(getSettings().theme)); } catch {} });
   let readyHtml = '', frameLoaded = false;
@@ -140,7 +138,6 @@ async function showHud(page = selectedPage) {
     if (selectedPage === 'state' && readyHtml && !frameLoaded) { frame.srcdoc = readyHtml; frameLoaded = true; }
     rulesPage.hidden = selectedPage !== 'rules';
     historyPage.hidden = selectedPage !== 'history'; displayPage.hidden = selectedPage !== 'display';
-    mapLink.element.style.display=selectedPage==='state'?'':'none';
     frame.hidden = selectedPage !== 'state'; generationPage.hidden = selectedPage !== 'generate'; templatePage.hidden = selectedPage !== 'templates';
     for (const [b, name] of [[stateTab, 'state'], [generateTab, 'generate'], [templateTab, 'templates'], [historyTab, 'history'], [displayTab, 'display'], [rulesTab, 'rules']]) {
       b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(selectedPage === name));
@@ -154,11 +151,12 @@ async function showHud(page = selectedPage) {
     const j = e.key === 'Home' ? 0 : e.key === 'End' ? 5 : (i + (e.key === 'ArrowRight' ? 1 : 5)) % 6;
     selectPage(pages[j]); [stateTab, generateTab, templateTab, rulesTab, historyTab, displayTab][j].focus();
   });
-  selectHudPage = selectPage; tabs.append(stateTab, generateTab, templateTab, rulesTab, historyTab, displayTab); body.append(mapLink.element, frame, generationPage, templatePage, historyPage, displayPage, rulesPage); selectPage(page);
+  selectHudPage = selectPage; tabs.append(stateTab, generateTab, templateTab, rulesTab, historyTab, displayTab); body.append(frame, generationPage, templatePage, historyPage, displayPage, rulesPage); selectPage(page);
   frame.title = '世界状态栏编辑器';
   // Only the bundled frame may use this variable bridge; commands are allowlisted.
   const token = crypto.randomUUID();
   const bridge = `<script>
+  window.WSH_CARD_KEY=${JSON.stringify(encodeURIComponent(context().characters[context().characterId].avatar || 'current'))};
   const token=${JSON.stringify(token)};let seq=0;const pending=new Map();
   window.STscript=command=>new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>{pending.delete(id);reject(Error('连接超时，请重新打开面板。'))},15000);pending.set(id,{resolve,reject,timer});parent.postMessage({wsh:token,id,command},'*')});
   addEventListener('message',e=>{if(e.source!==parent||e.data?.wsh!==token)return;const p=pending.get(e.data.id);if(!p)return;clearTimeout(p.timer);pending.delete(e.data.id);e.data.error?p.reject(Error(e.data.error)):p.resolve(e.data.value)});
@@ -183,7 +181,7 @@ async function showHud(page = selectedPage) {
     } catch (e) { event.source.postMessage({ wsh: token, id: requestId, error: e.message }, '*'); }
   };
   addEventListener('message', listener);
-  dialog.addEventListener('close', () => { mapLink.destroy(); recordsView.dispose(); removeEventListener('message', listener); frame.srcdoc = ''; if (generationForm?.parentElement === generationPage) formHome?.append(generationForm); dialog.remove(); if (hudPanel === dialog) { hudPanel = null; selectHudPage = null; } }, { once: true });
+  dialog.addEventListener('close', () => { recordsView.dispose(); removeEventListener('message', listener); frame.srcdoc = ''; if (generationForm?.parentElement === generationPage) formHome?.append(generationForm); dialog.remove(); if (hudPanel === dialog) { hudPanel = null; selectHudPage = null; } }, { once: true });
   close.onclick = closeHud;
   const quickActions = node('div', undefined, 'wsh-actions');
   const quickStatus = node('p', '', 'wsh-quick-status'); quickStatus.setAttribute('role', 'status');

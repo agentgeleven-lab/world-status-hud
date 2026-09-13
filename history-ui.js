@@ -21,6 +21,7 @@ export function historyView({ history, node, floor = null }) {
       for (const [field, value] of Object.entries(fields)) {
         const line = node('div', undefined, 'wsh-history-field');
         let text = typeof value === 'boolean' ? (value ? '是' : '否') : Array.isArray(value) ? value.join('、') : value && typeof value === 'object' ? `${value.当前} / ${value.最大}` : String(value ?? '');
+        if (text.length > 20 || text.includes('\n')) line.classList.add('wsh-history-long');
         line.append(node('span', field), node('span', text)); card.append(line);
       }
       body.append(card);

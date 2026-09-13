@@ -40,3 +40,4 @@ html[data-wsh-frame] .danger{color:var(--wsh-danger)}
 html[data-wsh-frame] header{padding:18px}html[data-wsh-frame] h1{font-size:21px}html[data-wsh-frame] .value{font-size:14px}html[data-wsh-frame] .number{font-size:22px}
 @media(max-width:420px){.wsh-theme-grid{grid-template-columns:1fr}html[data-wsh-theme] .wsh-history-field{gap:12px;font-size:12px}html[data-wsh-frame] body{padding:4px}html[data-wsh-frame] #cards{grid-template-columns:1fr}}
 
+html[data-wsh-theme] .wsh-history-long{flex-direction:column;gap:5px}html[data-wsh-theme] .wsh-history-long>span:last-child{text-align:left}html[data-wsh-frame] .project-toggle{color:var(--wsh-accent)!important}html[data-wsh-frame] .scene-item{color:var(--wsh-text)}
