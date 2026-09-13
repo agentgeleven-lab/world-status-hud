@@ -1,5 +1,5 @@
 import { checkpointState } from './state-checkpoint.js';
-import { mergeUpdates } from './state-tools.js';
+import { mergeUpdates, RELATION_UPDATE_RULES } from './state-tools.js';
 export async function generateStatus(CONFIG, signal) {
 const LOCK = '__LWB_HUD_BUILDER_V1_RUNNING__';
 if (window[LOCK]) {
@@ -144,6 +144,7 @@ try {
 禁止新增或删除项目/变量，禁止改变类型，不确定的值保持不变。
 可用类型：文本、有限数字、布尔、字符串数组、进度对象。进度必须完整给出当前和最大字段，0≤当前≤最大且最大>0。
 不要机械重复扣除已体现在状态中的变化。`;
+  systemPrompt += '\n\n' + RELATION_UPDATE_RULES;
   if (CONFIG.statusRules) systemPrompt += '\n\n' + CONFIG.statusRules;
   const replacing = CONFIG.mode !== 'update' && (CONFIG.mode === 'replace' || isUntouchedDemo || initial === null);
   const prompt = JSON.stringify({
